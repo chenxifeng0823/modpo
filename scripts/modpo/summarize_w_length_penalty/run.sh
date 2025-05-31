@@ -1,5 +1,14 @@
-# sh scripts/modpo/summarize_w_length_penalty/run.sh
-LAUNCH="accelerate launch --config_file scripts/accelerate_configs/multi_gpu.yaml --num_processes=8"
+#!/bin/bash
+
+# Check for available GPUs
+NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
+if [ $NUM_GPUS -eq 0 ]; then
+    echo "No GPUs found. Running on CPU..."
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/cpu_config.yaml"
+else
+    echo "Found $NUM_GPUS GPUs"
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/default_config.yaml --num_processes=$NUM_GPUS"
+fi
 
 base_model_name="meta-llama/Llama-2-7b-hf"
 prompt_template="\n\nParagraph:\n{raw_prompt}\n\nTL;DR:\n"

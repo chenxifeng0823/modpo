@@ -1,6 +1,15 @@
 #!/bin/bash
 # sh scripts/modpo/beavertails/advanced_modpo/run.sh
-LAUNCH="accelerate launch --config_file scripts/accelerate_configs/multi_gpu.yaml --num_processes=8"
+
+# Check for available GPUs
+NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
+if [ $NUM_GPUS -eq 0 ]; then
+    echo "No GPUs found. Running on CPU..."
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/cpu_config.yaml"
+else
+    echo "Found $NUM_GPUS GPUs"
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/default_config.yaml --num_processes=$NUM_GPUS"
+fi
 
 sft_model_name="PKU-Alignment/alpaca-7b-reproduced"
 prompt_template="BEGINNING OF CONVERSATION: USER: {raw_prompt} ASSISTANT:"

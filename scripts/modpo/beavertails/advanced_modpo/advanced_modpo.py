@@ -7,6 +7,7 @@ import tyro
 from accelerate import Accelerator
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from accelerate.utils import is_cuda_available, is_xpu_available
 
 from src.trainer.advanced_modpo_trainer import AdvancedMODPOTrainer
 from src.data.configs import DATASET_CONFIGS, DEFAULT_PROMPT_TEMPLATE
@@ -77,7 +78,7 @@ class ScriptArguments:
             lr_scheduler_type="cosine",
             warmup_steps=0.1,
             weight_decay=0.05,
-            fp16=True,
+            fp16=is_cuda_available(),
             remove_unused_columns=False,
             run_name="dev_advanced_modpo",
             report_to="wandb",
@@ -102,24 +103,45 @@ class ScriptArguments:
     ))
 
 
+def get_device_setup():
+    """Get appropriate device setup based on available hardware."""
+    if is_cuda_available():
+        return {"device_map": {"": Accelerator().local_process_index}}
+    elif is_xpu_available():
+        return {"device_map": "auto"}
+    else:
+        return {"device_map": "cpu"}
+
+
 def main():
     script_args = tyro.cli(ScriptArguments)
     set_seeds(script_args.training_args.seed)
     if not script_args.peft:
         script_args.peft_config = None
 
+    # Get device setup
+    device_setup = get_device_setup()
+
     # base model
     print_local_main("loading model...")
-    sft_model = AutoModelForCausalLM.from_pretrained(
-        script_args.sft_model_name,
-        use_flash_attention_2=script_args.use_flash_attention_2,
-        torch_dtype=torch.bfloat16,
-        **({
-            "device_map": {
-                "": Accelerator().local_process_index
-            }
-        } if not param_sharding_enabled() else {}),
-    )
+    try:
+        sft_model = AutoModelForCausalLM.from_pretrained(
+            script_args.sft_model_name,
+            use_flash_attention_2=script_args.use_flash_attention_2,
+            torch_dtype=torch.bfloat16,
+            **device_setup)
+    except RuntimeError as e:
+        if "CUDA" in str(e):
+            print("CUDA error encountered. Falling back to CPU...")
+            device_setup = {"device_map": "cpu"}
+            sft_model = AutoModelForCausalLM.from_pretrained(
+                script_args.sft_model_name,
+                use_flash_attention_2=False,
+                torch_dtype=torch.float32,
+                **device_setup)
+        else:
+            raise e
+
     sft_model.config.update({
         "use_cache": False,
         "pad_token_id": sft_model.config.eos_token_id

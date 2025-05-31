@@ -1,5 +1,15 @@
+#!/bin/bash
 # sh scripts/modpo/beavertails/run.sh
-LAUNCH="accelerate launch --config_file scripts/accelerate_configs/multi_gpu.yaml --num_processes=8"
+
+# Check for available GPUs
+NUM_GPUS=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader | wc -l)
+if [ $NUM_GPUS -eq 0 ]; then
+    echo "No GPUs found. Running on CPU..."
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/cpu_config.yaml"
+else
+    echo "Found $NUM_GPUS GPUs"
+    LAUNCH="accelerate launch --config_file scripts/accelerate_configs/default_config.yaml --num_processes=$NUM_GPUS"
+fi
 
 sft_model_name="PKU-Alignment/alpaca-7b-reproduced"
 prompt_template="BEGINNING OF CONVERSATION: USER: {raw_prompt} ASSISTANT:"
@@ -31,7 +41,7 @@ PYTHONPATH=. $LAUNCH scripts/examples/dpo/dpo.py \
     --peft_config.lora_alpha 1 \
     --peft_config.lora_dropout 0
 
-# Language Modeling: Run MODPO on helpful preferences, with the safe reward as margin, to train language models that are both helpful and safe
+# Language Modeling: Run MODPO on helpful preferences, with the safe reward as margin
 # r = (w)r_better + (1-w)r_safer
 for w in 0.1 0.5 0.9; do
     lm_run_name="${dataset_name}/modpo/lm/($w)better+(1-$w)safer"
