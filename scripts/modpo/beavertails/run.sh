@@ -11,7 +11,7 @@ else
     LAUNCH="accelerate launch --config_file scripts/accelerate_configs/default_config.yaml --num_processes=$NUM_GPUS"
 fi
 
-sft_model_name="PKU-Alignment/alpaca-7b-reproduced"
+sft_model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 prompt_template="BEGINNING OF CONVERSATION: USER: {raw_prompt} ASSISTANT:"
 dataset_name="PKU-Alignment/PKU-SafeRLHF-10K"
 sanity_check=False
